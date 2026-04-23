@@ -6,9 +6,14 @@ Runs daily to assign realistic Cloud/DevOps/SRE tasks to Mithra via Jira.
 import sys
 import os
 from datetime import datetime, date
+from pathlib import Path
 from task_generator import TaskGenerator
 from jira_client import JiraClient
 from skills_tracker import SkillsTracker
+
+# Resolve paths relative to this file, not cwd
+AGENT_DIR = Path(__file__).parent
+SKILLS_FILE = AGENT_DIR.parent / "mithra-skills.yaml"
 
 
 def main():
@@ -18,7 +23,7 @@ def main():
         email=os.environ["JIRA_EMAIL"],
         api_token=os.environ["JIRA_API_TOKEN"],
     )
-    skills = SkillsTracker("mithra-skills.yaml")
+    skills = SkillsTracker(str(SKILLS_FILE))
     generator = TaskGenerator(
         github_models_api_key=os.environ["GITHUB_MODELS_API_KEY"],
         skills=skills,
