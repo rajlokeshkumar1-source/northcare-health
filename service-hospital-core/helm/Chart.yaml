@@ -1,0 +1,14 @@
+apiVersion: v2
+name: hospital-core
+description: NorthCare Hospital Core microservice — patient records and ward management
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - northcare
+  - hospital
+  - patient-records
+  - hipaa
+maintainers:
+  - name: NorthCare Platform Team
+    email: platform@northcare.internal

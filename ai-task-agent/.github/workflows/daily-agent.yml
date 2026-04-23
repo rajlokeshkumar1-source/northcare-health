@@ -1,0 +1,33 @@
+name: Daily Task Agent
+
+on:
+  schedule:
+    - cron: '0 14 * * 1-5'  # 9am EST (14:00 UTC) weekdays
+  workflow_dispatch:          # Manual trigger for testing
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: ai-task-agent/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r ai-task-agent/requirements.txt
+
+      - name: Run AI Task Agent
+        working-directory: ai-task-agent
+        env:
+          GITHUB_TOKEN: ${{ secrets.AGENT_GITHUB_TOKEN }}
+          GITHUB_MODELS_API_KEY: ${{ secrets.GITHUB_MODELS_API_KEY }}
+        run: python agent/main.py

@@ -1,0 +1,98 @@
+replicaCount: 2
+
+image:
+  repository: northcare/telehealth
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Kubernetes service config
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+# Port the container JVM listens on (overridden in k8s via SERVER_PORT env var)
+containerPort: 8080
+
+namespace: telehealth
+
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "100m"
+  limits:
+    memory: "512Mi"
+    cpu: "500m"
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+env:
+  SPRING_PROFILES_ACTIVE: "prod"
+  DB_USERNAME: "postgres"
+  # DB_PASSWORD should be injected via secret; do NOT hardcode here
+  DB_PASSWORD: ""
+  SERVER_PORT: "8080"
+  EUREKA_SERVICE_URL: "http://eureka-admin:$(EUREKA_ADMIN_PASSWORD)@service-discovery.discovery.svc.cluster.local:8761/eureka/"
+  EUREKA_ENABLED: "true"
+
+database:
+  host: postgres-service
+  port: 5432
+  name: northcare_telehealth
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: telehealth.northcare.health
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+serviceAccount:
+  create: true
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/path: "/actuator/prometheus"
+  prometheus.io/port: "8080"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL

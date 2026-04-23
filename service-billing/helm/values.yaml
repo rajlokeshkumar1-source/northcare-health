@@ -1,0 +1,72 @@
+replicaCount: 2
+
+image:
+  repository: northcare/billing-service
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+nameOverride: ""
+fullnameOverride: ""
+
+namespace: billing
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  hosts:
+    - host: billing.northcare.internal
+      paths:
+        - path: /
+          pathType: Prefix
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+
+env:
+  DB_USERNAME: northcare
+  # DB_PASSWORD should be injected via a Kubernetes Secret, not stored here
+  EUREKA_SERVICE_URL: "http://eureka-admin:$(EUREKA_ADMIN_PASSWORD)@service-discovery.discovery.svc.cluster.local:8761/eureka/"
+  EUREKA_ENABLED: "true"
+
+postgresql:
+  host: postgresql.billing.svc.cluster.local
+  port: 5432
+  database: northcare_billing
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 8080
+  initialDelaySeconds: 20
+  periodSeconds: 5
+  failureThreshold: 3
+
+serviceAccount:
+  create: false
+  name: ""

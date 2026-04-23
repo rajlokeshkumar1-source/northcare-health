@@ -1,0 +1,88 @@
+pipeline {
+    agent any
+
+    environment {
+        SERVICE_NAME = 'billing'
+        IMAGE_NAME   = "northcare/${SERVICE_NAME}-service"
+        IMAGE_TAG    = "${BUILD_NUMBER}"
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build & Test') {
+            steps {
+                sh 'mvn clean verify -q'
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
+                }
+            }
+        }
+
+        stage('Code Quality') {
+            steps {
+                // Non-blocking — warnings are surfaced, build is not failed here
+                sh 'mvn checkstyle:check -q || true'
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh """
+                    docker build \
+                        -t ${IMAGE_NAME}:${IMAGE_TAG} \
+                        -t ${IMAGE_NAME}:latest \
+                        .
+                """
+            }
+        }
+
+        stage('Docker Push') {
+            when { branch 'main' }
+            steps {
+                withCredentials([usernamePassword(
+                        credentialsId: 'docker-registry',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS')]) {
+                    sh """
+                        echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                        docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                        docker push ${IMAGE_NAME}:latest
+                    """
+                }
+            }
+        }
+
+        stage('Deploy to Dev') {
+            when { branch 'main' }
+            steps {
+                sh """
+                    helm upgrade --install ${SERVICE_NAME}-service ./helm \
+                        --namespace billing \
+                        --create-namespace \
+                        --set image.repository=${IMAGE_NAME} \
+                        --set image.tag=${IMAGE_TAG} \
+                        --wait --timeout 120s
+                """
+            }
+        }
+    }
+
+    post {
+        failure {
+            mail to: 'devops@northcare.com',
+                 subject: "❌ Build Failed: ${SERVICE_NAME} #${BUILD_NUMBER}",
+                 body: "Build ${BUILD_NUMBER} of ${SERVICE_NAME} failed.\n\nDetails: ${BUILD_URL}"
+        }
+        always {
+            cleanWs()
+        }
+    }
+}

@@ -1,0 +1,92 @@
+pipeline {
+    agent any
+
+    environment {
+        SERVICE_NAME   = 'notifications'
+        DOCKER_IMAGE   = "northcare/${SERVICE_NAME}-service"
+        DOCKER_TAG     = "${BUILD_NUMBER}"
+        SERVICE_DIR    = "service-${SERVICE_NAME}"
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps { checkout scm }
+        }
+
+        stage('Build') {
+            steps {
+                dir("${SERVICE_DIR}") {
+                    sh 'mvn clean compile -B -q'
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                dir("${SERVICE_DIR}") {
+                    sh 'mvn test -B'
+                }
+            }
+            post {
+                always {
+                    junit "${SERVICE_DIR}/target/surefire-reports/*.xml"
+                }
+            }
+        }
+
+        stage('Package') {
+            steps {
+                dir("${SERVICE_DIR}") {
+                    sh 'mvn package -DskipTests -B -q'
+                }
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                dir("${SERVICE_DIR}") {
+                    sh """
+                        docker build \
+                            -t ${DOCKER_IMAGE}:${DOCKER_TAG} \
+                            -t ${DOCKER_IMAGE}:latest .
+                    """
+                }
+            }
+        }
+
+        stage('Docker Push') {
+            when { branch 'main' }
+            steps {
+                withCredentials([usernamePassword(
+                        credentialsId: 'docker-hub-credentials',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS')]) {
+                    sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+                    sh "docker push ${DOCKER_IMAGE}:${DOCKER_TAG}"
+                    sh "docker push ${DOCKER_IMAGE}:latest"
+                }
+            }
+        }
+
+        stage('Deploy to Dev') {
+            when { branch 'main' }
+            steps {
+                sh """
+                    helm upgrade --install ${SERVICE_NAME} \
+                        ./${SERVICE_DIR}/helm \
+                        --namespace notifs \
+                        --create-namespace \
+                        --set image.tag=${DOCKER_TAG} \
+                        --wait --timeout 3m
+                """
+            }
+        }
+    }
+
+    post {
+        failure { echo "❌ Pipeline FAILED for service: ${SERVICE_NAME}" }
+        success { echo "✅ Pipeline PASSED for service: ${SERVICE_NAME}" }
+        always  { cleanWs() }
+    }
+}

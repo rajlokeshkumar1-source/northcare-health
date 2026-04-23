@@ -1,0 +1,92 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_REGION      = 'us-east-1'
+        ECR_REGISTRY    = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        IMAGE_NAME      = 'northcare/hospital-core'
+        IMAGE_TAG       = "${env.GIT_COMMIT?.take(7) ?: 'latest'}"
+        FULL_IMAGE      = "${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+        GITOPS_REPO     = 'git@github.com:northcare/gitops-argocd.git'
+        VALUES_PATH     = 'hospital-core/dev/values.yaml'
+    }
+
+    tools {
+        maven 'Maven 3.9'
+        jdk   'JDK 21'
+    }
+
+    stages {
+        stage('Test') {
+            steps {
+                sh 'mvn test -B --no-transfer-progress'
+            }
+            post {
+                always {
+                    junit 'target/surefire-reports/**/*.xml'
+                }
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'mvn package -DskipTests -B --no-transfer-progress'
+                archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh "docker build -t ${FULL_IMAGE} -t ${ECR_REGISTRY}/${IMAGE_NAME}:latest ."
+            }
+        }
+
+        stage('Trivy Scan') {
+            steps {
+                sh """
+                    trivy image \
+                      --exit-code 1 \
+                      --severity CRITICAL \
+                      --no-progress \
+                      ${FULL_IMAGE}
+                """
+            }
+        }
+
+        stage('Push to ECR') {
+            steps {
+                withAWS(region: AWS_REGION, credentials: 'aws-ecr-credentials') {
+                    sh "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}"
+                    sh "docker push ${FULL_IMAGE}"
+                    sh "docker push ${ECR_REGISTRY}/${IMAGE_NAME}:latest"
+                }
+            }
+        }
+
+        stage('Update GitOps') {
+            steps {
+                sshagent(['gitops-deploy-key']) {
+                    sh """
+                        git clone ${GITOPS_REPO} gitops-repo
+                        cd gitops-repo
+                        sed -i 's|tag:.*|tag: "${IMAGE_TAG}"|g' ${VALUES_PATH}
+                        git config user.email 'ci@northcare.com'
+                        git config user.name  'NorthCare CI'
+                        git add ${VALUES_PATH}
+                        git commit -m 'chore(cd): update hospital-core to ${IMAGE_TAG} [skip ci]'
+                        git push origin main
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+        failure {
+            echo "Pipeline failed for commit ${env.GIT_COMMIT}"
+        }
+    }
+}

@@ -1,0 +1,14 @@
+apiVersion: v2
+name: billing-service
+description: NorthCare Billing Service — invoice management and payment processing
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - northcare
+  - billing
+  - healthcare
+  - invoicing
+maintainers:
+  - name: NorthCare DevOps
+    email: devops@northcare.com

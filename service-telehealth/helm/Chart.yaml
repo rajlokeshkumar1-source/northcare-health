@@ -1,0 +1,15 @@
+apiVersion: v2
+name: telehealth
+description: NorthCare Telehealth Service – Video Consultations & Remote Patient Monitoring
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - telehealth
+  - northcare
+  - video-consultation
+  - remote-monitoring
+  - hipaa
+maintainers:
+  - name: NorthCare Platform Team
+    email: platform@northcare.health

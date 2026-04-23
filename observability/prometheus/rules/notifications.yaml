@@ -1,0 +1,61 @@
+groups:
+  - name: notifications.rules
+    interval: 30s
+    rules:
+      - record: notifications:availability:ratio5m
+        expr: |
+          sum(rate(http_requests_total{job="notifications",status_code!~"5.."}[5m]))
+          /
+          sum(rate(http_requests_total{job="notifications"}[5m]))
+
+      - alert: NotificationsHighErrorRate
+        expr: notifications:availability:ratio5m < 0.99
+        for: 5m
+        labels:
+          severity: warning
+          service: notifications
+          team: platform
+        annotations:
+          summary: "Notifications error rate > 1%"
+          description: >
+            SLO violation: {{ $value | humanizePercentage }} availability.
+            Patient appointment reminders and alerts may be delayed.
+          runbook_url: "https://github.com/northcare-health/observability/blob/main/runbooks/notifications.md"
+
+      - alert: NotificationsDeliveryFailureRate
+        expr: |
+          rate(notifications_delivery_failed_total[5m])
+          /
+          rate(notifications_sent_total[5m]) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          service: notifications
+          team: platform
+        annotations:
+          summary: "Notification delivery failure rate > 5%"
+          description: >
+            {{ $value | humanizePercentage }} of notifications are failing to deliver.
+            Check Twilio/SES status and credentials.
+
+      - alert: NotificationsSMSQueueBacklog
+        expr: notifications_sms_queue_depth > 1000
+        for: 10m
+        labels:
+          severity: warning
+          service: notifications
+          team: platform
+        annotations:
+          summary: "Notifications SMS queue depth > 1000"
+          description: "{{ $value | humanize }} SMS messages are queued. Twilio throughput may be insufficient."
+
+      - alert: NotificationsPodDown
+        expr: kube_deployment_status_replicas_available{deployment="notifications", namespace="notifs"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: notifications
+          team: platform
+        annotations:
+          summary: "Notifications service has no running pods"
+          description: "All notifications are stopped — patients won't receive appointment reminders."

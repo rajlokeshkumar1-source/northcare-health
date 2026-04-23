@@ -1,0 +1,195 @@
+# Cross-service SLO recording rules using Google SRE multi-window multi-burn-rate pattern.
+# Reference: https://sre.google/workbook/alerting-on-slos/
+#
+# SLO targets:
+#   hospital-core:  99.5% availability (error budget: 0.5% = ~3.6 h/month)
+#   telehealth:     99.5% availability
+#   billing:        99.9% availability (error budget: 0.1% = ~43 min/month)
+#   insurance:      99.5% availability
+#   notifications:  99.0% availability (error budget: 1.0% = ~7.3 h/month)
+
+groups:
+  - name: slo.recording.short
+    interval: 30s
+    rules:
+      # ── 5-minute windows (fast burn detection) ────────────────────────────
+
+      - record: slo:http_availability:ratio_rate5m
+        expr: |
+          label_replace(
+            sum by (service) (rate(http_requests_total{status_code!~"5.."}[5m]))
+            /
+            sum by (service) (rate(http_requests_total[5m])),
+            "window", "5m", "", ""
+          )
+
+      # ── 30-minute windows ─────────────────────────────────────────────────
+
+      - record: slo:http_availability:ratio_rate30m
+        expr: |
+          label_replace(
+            sum by (service) (rate(http_requests_total{status_code!~"5.."}[30m]))
+            /
+            sum by (service) (rate(http_requests_total[30m])),
+            "window", "30m", "", ""
+          )
+
+      # ── 1-hour windows ────────────────────────────────────────────────────
+
+      - record: slo:http_availability:ratio_rate1h
+        expr: |
+          label_replace(
+            sum by (service) (rate(http_requests_total{status_code!~"5.."}[1h]))
+            /
+            sum by (service) (rate(http_requests_total[1h])),
+            "window", "1h", "", ""
+          )
+
+  - name: slo.recording.long
+    interval: 300s
+    rules:
+      # ── 6-hour windows ────────────────────────────────────────────────────
+
+      - record: slo:http_availability:ratio_rate6h
+        expr: |
+          label_replace(
+            sum by (service) (rate(http_requests_total{status_code!~"5.."}[6h]))
+            /
+            sum by (service) (rate(http_requests_total[6h])),
+            "window", "6h", "", ""
+          )
+
+      # ── 24-hour windows ───────────────────────────────────────────────────
+
+      - record: slo:http_availability:ratio_rate24h
+        expr: |
+          label_replace(
+            sum by (service) (rate(http_requests_total{status_code!~"5.."}[24h]))
+            /
+            sum by (service) (rate(http_requests_total[24h])),
+            "window", "24h", "", ""
+          )
+
+      # ── 3-day windows (used for monthly error budget calculation) ─────────
+
+      - record: slo:http_availability:ratio_rate3d
+        expr: |
+          label_replace(
+            sum by (service) (rate(http_requests_total{status_code!~"5.."}[3d]))
+            /
+            sum by (service) (rate(http_requests_total[3d])),
+            "window", "3d", "", ""
+          )
+
+  - name: slo.error_budget
+    interval: 300s
+    rules:
+      # Error budget remaining — per service, based on 30-day window
+      # budget_remaining = (availability_ratio - slo_target) / (1 - slo_target)
+
+      - record: slo:error_budget_remaining:hospital_core
+        expr: |
+          (slo:http_availability:ratio_rate3d{service="hospital-core"} - 0.995)
+          / (1 - 0.995)
+
+      - record: slo:error_budget_remaining:telehealth
+        expr: |
+          (slo:http_availability:ratio_rate3d{service="telehealth"} - 0.995)
+          / (1 - 0.995)
+
+      - record: slo:error_budget_remaining:billing
+        expr: |
+          (slo:http_availability:ratio_rate3d{service="billing"} - 0.999)
+          / (1 - 0.999)
+
+      - record: slo:error_budget_remaining:insurance
+        expr: |
+          (slo:http_availability:ratio_rate3d{service="insurance"} - 0.995)
+          / (1 - 0.995)
+
+      - record: slo:error_budget_remaining:notifications
+        expr: |
+          (slo:http_availability:ratio_rate3d{service="notifications"} - 0.990)
+          / (1 - 0.990)
+
+  # ── Multi-window multi-burn-rate alerts (Google SRE pattern) ──────────────
+  # Fast burn: 14.4x budget consumption rate → page now (1h + 5m windows)
+  # Slow burn:  6x budget consumption rate → ticket (6h + 30m windows)
+  # Trend alert: sustained degradation over 3 days
+
+  - name: slo.burnrate.hospital_core
+    rules:
+      - alert: HospitalCoreSLOFastBurn
+        expr: |
+          (
+            (1 - slo:http_availability:ratio_rate1h{service="hospital-core"})  > (14.4 * (1-0.995))
+          ) and (
+            (1 - slo:http_availability:ratio_rate5m{service="hospital-core"})  > (14.4 * (1-0.995))
+          )
+        for: 2m
+        labels:
+          severity: page
+          service: hospital-core
+          slo: availability
+          burn_rate: fast
+        annotations:
+          summary: "Hospital Core burning error budget 14.4x fast"
+          description: >
+            At this rate, the monthly error budget will be exhausted in ~2 hours.
+            1h error rate: {{ printf "%.2f%%" (mul (sub 1 (index .Labels "slo:http_availability:ratio_rate1h")) 100) }}
+          runbook_url: "https://github.com/northcare-health/observability/blob/main/runbooks/hospital-core.md#slo-burn"
+
+      - alert: HospitalCoreSLOSlowBurn
+        expr: |
+          (
+            (1 - slo:http_availability:ratio_rate6h{service="hospital-core"})  > (6 * (1-0.995))
+          ) and (
+            (1 - slo:http_availability:ratio_rate30m{service="hospital-core"}) > (6 * (1-0.995))
+          )
+        for: 15m
+        labels:
+          severity: critical
+          service: hospital-core
+          slo: availability
+          burn_rate: slow
+        annotations:
+          summary: "Hospital Core burning error budget 6x (slow)"
+          description: >
+            Error budget will be exhausted in ~5 days at current burn rate.
+            Investigate and address before budget is exhausted.
+
+  - name: slo.burnrate.billing
+    rules:
+      - alert: BillingSLOFastBurn
+        expr: |
+          (
+            (1 - slo:http_availability:ratio_rate1h{service="billing"})  > (14.4 * (1-0.999))
+          ) and (
+            (1 - slo:http_availability:ratio_rate5m{service="billing"})  > (14.4 * (1-0.999))
+          )
+        for: 2m
+        labels:
+          severity: page
+          service: billing
+          slo: availability
+          burn_rate: fast
+        annotations:
+          summary: "Billing burning error budget 14.4x fast"
+          description: "Billing SLO (99.9%) is being violated at an alarming rate."
+
+      - alert: BillingSLOSlowBurn
+        expr: |
+          (
+            (1 - slo:http_availability:ratio_rate6h{service="billing"})  > (6 * (1-0.999))
+          ) and (
+            (1 - slo:http_availability:ratio_rate30m{service="billing"}) > (6 * (1-0.999))
+          )
+        for: 15m
+        labels:
+          severity: critical
+          service: billing
+          slo: availability
+          burn_rate: slow
+        annotations:
+          summary: "Billing error budget burn rate 6x (slow)"
+          description: "Billing SLO is being slowly eroded. Revenue impact is accruing."

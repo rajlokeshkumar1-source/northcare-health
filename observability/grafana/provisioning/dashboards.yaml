@@ -1,0 +1,14 @@
+apiVersion: 1
+
+providers:
+  - name: NorthCare Dashboards
+    orgId: 1
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards/northcare
+      foldersFromFilesStructure: false
+    # This file is loaded by the Grafana sidecar (k8s-sidecar)
+    # which watches ConfigMaps labelled grafana_dashboard: "1"

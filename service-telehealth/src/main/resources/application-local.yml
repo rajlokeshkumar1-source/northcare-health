@@ -1,0 +1,18 @@
+# Local development profile — uses embedded PostgreSQL on port 5433, no Eureka
+
+eureka:
+  client:
+    enabled: false
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5433/northcare_telehealth
+    username: northcare
+    password: changeme
+  flyway:
+    baseline-on-migrate: true
+
+logging:
+  level:
+    com.northcare: DEBUG
+    org.flywaydb: INFO

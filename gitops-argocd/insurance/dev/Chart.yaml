@@ -1,0 +1,10 @@
+apiVersion: v2
+name: insurance
+description: NorthCare Insurance Service — eligibility verification, pre-authorization, and EOB processing
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+dependencies:
+  - name: northcare-service
+    version: "0.1.0"
+    repository: "https://northcare-health.github.io/shared-helm-charts"

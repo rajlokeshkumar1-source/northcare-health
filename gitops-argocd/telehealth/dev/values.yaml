@@ -1,0 +1,52 @@
+image:
+  repository: <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/northcare/telehealth
+  tag: "latest"  # Updated by Jenkins on each deploy
+  pullPolicy: Always
+
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 150m
+    memory: 256Mi
+  limits:
+    cpu: 750m
+    memory: 512Mi
+
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::<ACCOUNT_ID>:role/northcare-telehealth-irsa
+
+env:
+  ENVIRONMENT: dev
+  SERVICE_NAME: telehealth
+  AWS_REGION: us-east-1
+  LOG_LEVEL: DEBUG
+  # WebRTC / video session config injected via secrets
+  SESSION_MAX_DURATION_MINUTES: "60"
+
+envFrom:
+  - secretRef:
+      name: telehealth-secrets
+
+hpa:
+  enabled: false
+
+externalSecret:
+  enabled: true
+  secretStoreRef: aws-secrets-store
+  target: telehealth-secrets
+  data:
+    - secretKey: DATABASE_URL
+      remoteRef:
+        key: northcare/dev/telehealth/db
+        property: database_url
+    - secretKey: DB_PASSWORD
+      remoteRef:
+        key: northcare/dev/telehealth/db
+        property: password
+    - secretKey: VIDEO_API_KEY
+      remoteRef:
+        key: northcare/dev/telehealth/video
+        property: api_key

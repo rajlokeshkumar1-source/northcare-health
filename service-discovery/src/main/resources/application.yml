@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: service-discovery
+  security:
+    user:
+      name: ${EUREKA_ADMIN_USERNAME:eureka-admin}
+      password: ${EUREKA_ADMIN_PASSWORD:northcare-eureka-2025}
+
+server:
+  port: 8761
+
+eureka:
+  admin:
+    username: ${EUREKA_ADMIN_USERNAME:eureka-admin}
+    password: ${EUREKA_ADMIN_PASSWORD:northcare-eureka-2025}
+  instance:
+    hostname: ${EUREKA_HOSTNAME:localhost}
+    prefer-ip-address: false
+  client:
+    # Eureka server does NOT register itself
+    register-with-eureka: false
+    fetch-registry: false
+    service-url:
+      defaultZone: http://${EUREKA_ADMIN_USERNAME:eureka-admin}:${EUREKA_ADMIN_PASSWORD:northcare-eureka-2025}@${eureka.instance.hostname}:${server.port}/eureka/
+  server:
+    # Wait 2 min before expiring instances — important for K8s pod startup
+    eviction-interval-timer-in-ms: 10000
+    # Disable self-preservation in non-prod (helps see real pod counts)
+    enable-self-preservation: ${EUREKA_SELF_PRESERVATION:false}
+    # Renewal threshold
+    renewal-percent-threshold: 0.85
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+logging:
+  level:
+    com.netflix.eureka: WARN
+    com.netflix.discovery: WARN

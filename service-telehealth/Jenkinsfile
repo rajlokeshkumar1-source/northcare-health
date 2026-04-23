@@ -1,0 +1,121 @@
+pipeline {
+    agent any
+
+    environment {
+        SERVICE_NAME        = 'telehealth'
+        IMAGE_NAME          = "northcare/${SERVICE_NAME}"
+        HELM_RELEASE        = "${SERVICE_NAME}-service"
+        K8S_NAMESPACE       = "${SERVICE_NAME}"
+        K8S_NAMESPACE_PROD  = "${SERVICE_NAME}-prod"
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    env.GIT_COMMIT_SHORT = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    env.IMAGE_TAG        = "${env.BRANCH_NAME}-${env.GIT_COMMIT_SHORT}"
+                }
+            }
+        }
+
+        stage('Build') {
+            steps {
+                dir("service-${SERVICE_NAME}") {
+                    sh 'mvn clean compile -q'
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                dir("service-${SERVICE_NAME}") {
+                    sh 'mvn test'
+                }
+            }
+            post {
+                always {
+                    junit "service-${SERVICE_NAME}/target/surefire-reports/*.xml"
+                }
+            }
+        }
+
+        stage('Package') {
+            steps {
+                dir("service-${SERVICE_NAME}") {
+                    sh 'mvn package -DskipTests -q'
+                }
+            }
+        }
+
+        stage('Docker Build & Push') {
+            when {
+                anyOf { branch 'main'; branch 'develop' }
+            }
+            steps {
+                dir("service-${SERVICE_NAME}") {
+                    withCredentials([usernamePassword(
+                            credentialsId: 'docker-registry-creds',
+                            usernameVariable: 'DOCKER_USER',
+                            passwordVariable: 'DOCKER_PASS')]) {
+                        sh """
+                            echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                            docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                            docker tag  ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest
+                            docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                            docker push ${IMAGE_NAME}:latest
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Dev') {
+            when { branch 'develop' }
+            steps {
+                sh """
+                    helm upgrade --install ${HELM_RELEASE} ./service-${SERVICE_NAME}/helm \
+                        --namespace ${K8S_NAMESPACE} \
+                        --create-namespace \
+                        --set image.tag=${IMAGE_TAG} \
+                        --set image.repository=${IMAGE_NAME} \
+                        --wait --timeout 5m
+                """
+            }
+        }
+
+        stage('Deploy to Production') {
+            when { branch 'main' }
+            steps {
+                input message: "Deploy ${SERVICE_NAME}:${env.IMAGE_TAG} to Production?", ok: 'Deploy'
+                sh """
+                    helm upgrade --install ${HELM_RELEASE} ./service-${SERVICE_NAME}/helm \
+                        --namespace ${K8S_NAMESPACE_PROD} \
+                        --create-namespace \
+                        --set image.tag=${IMAGE_TAG} \
+                        --set image.repository=${IMAGE_NAME} \
+                        --wait --timeout 5m
+                """
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+        failure {
+            echo "❌ Build FAILED for ${SERVICE_NAME}:${env.IMAGE_TAG ?: 'unknown'}"
+        }
+        success {
+            echo "✅ Build SUCCESS for ${SERVICE_NAME}:${env.IMAGE_TAG}"
+        }
+    }
+}

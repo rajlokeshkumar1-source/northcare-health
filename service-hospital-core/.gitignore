@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Environment / secrets — NEVER commit
+.env
+.env.*
+*.pem
+*.key
+
+# pytest
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+test-results.xml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Docker
+*.tar
+
+# Alembic
+alembic/versions/*.pyc
+
+# macOS
+.DS_Store
+
+# Misc
+*.log
+gitops-tmp/

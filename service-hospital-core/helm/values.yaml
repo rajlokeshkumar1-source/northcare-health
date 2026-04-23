@@ -1,0 +1,78 @@
+replicaCount: 2
+
+image:
+  repository: northcare/hospital-core
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  hosts:
+    - host: hospital-core.northcare.internal
+      paths:
+        - path: /
+          pathType: Prefix
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /actuator/health
+    port: 8080
+  initialDelaySeconds: 20
+  periodSeconds: 5
+  failureThreshold: 3
+
+env:
+  - name: SPRING_PROFILES_ACTIVE
+    value: "kubernetes"
+  - name: NORTHCARE_DB_SECRET_NAME
+    value: "northcare/prod/db-credentials"
+  - name: AWS_REGION
+    value: "us-east-1"
+  - name: EUREKA_SERVICE_URL
+    value: "http://eureka-admin:$(EUREKA_ADMIN_PASSWORD)@service-discovery.discovery.svc.cluster.local:8761/eureka/"
+  - name: EUREKA_ENABLED
+    value: "true"
+
+envFromSecret:
+  - secretName: northcare-hospital-core-secrets
+    keys:
+      - ENCRYPTION_KEY
+
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/northcare-hospital-core-role
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/path: /actuator/prometheus
+  prometheus.io/port: "8080"

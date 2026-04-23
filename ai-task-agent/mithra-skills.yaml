@@ -1,0 +1,80 @@
+# Mithra's skill tracker — updated by AI agent based on task completion
+meta:
+  project_start_date: "2025-01-01"  # Update to your actual start date
+  current_month: 1
+
+profile:
+  name: Mithra
+  target_role: "Senior Cloud/DevOps/SRE Engineer"
+  target_companies:
+    - "Canadian tech companies"
+    - "AWS consulting firms"
+
+skills:
+  aws:
+    eks: intermediate
+    iam_irsa: beginner
+    rds: intermediate
+    ecr: intermediate
+    secrets_manager: beginner
+    cloudwatch: intermediate
+    eventbridge: beginner
+    lambda: beginner
+  kubernetes:
+    deployments: intermediate
+    services: intermediate
+    ingress: beginner
+    hpa: beginner
+    rbac: beginner
+    namespace_management: intermediate
+  cicd:
+    jenkins: intermediate
+    argocd: beginner
+    gitops: beginner
+  iac:
+    terraform: beginner
+    terraform_modules: beginner
+  observability:
+    prometheus: beginner
+    grafana: beginner
+    alertmanager: beginner
+  sre:
+    slo_sli: beginner
+    incident_response: beginner
+    error_budgets: beginner
+
+monthly_curriculum:
+  month_1:
+    difficulty: beginner
+    focus:
+      - eks
+      - terraform
+      - argocd
+      - jenkins_pipeline
+    goal: "Deploy first service, understand GitOps flow end-to-end"
+
+  month_2:
+    difficulty: intermediate
+    focus:
+      - iam_irsa
+      - prometheus
+      - alertmanager
+      - slo_sli
+    goal: "Add observability, HIPAA security layer, write SLOs"
+
+  month_3:
+    difficulty: advanced
+    focus:
+      - hpa
+      - karpenter
+      - error_budgets
+      - incident_response
+    goal: "Handle scale, simulate and resolve incidents, chaos engineering"
+
+  month_4:
+    difficulty: senior
+    focus:
+      - terraform_modules
+      - cost_optimization
+      - multi_service_debugging
+    goal: "Platform maturity, cross-service issues, present architecture decisions"

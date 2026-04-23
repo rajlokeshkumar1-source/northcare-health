@@ -1,0 +1,16 @@
+apiVersion: v2
+name: insurance
+description: NorthCare Insurance Policy and Claims Management Service
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+maintainers:
+  - name: NorthCare Platform Team
+    email: platform@northcare.com
+
+keywords:
+  - insurance
+  - claims
+  - healthcare
+  - northcare

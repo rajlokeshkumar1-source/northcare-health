@@ -1,0 +1,47 @@
+image:
+  repository: <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/northcare/hospital-core
+  tag: "latest"  # Updated by Jenkins on each deploy
+  pullPolicy: Always
+
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::<ACCOUNT_ID>:role/northcare-hospital-core-irsa
+
+env:
+  ENVIRONMENT: dev
+  SERVICE_NAME: hospital-core
+  AWS_REGION: us-east-1
+  LOG_LEVEL: DEBUG
+
+envFrom:
+  - secretRef:
+      name: hospital-core-db-credentials
+
+hpa:
+  enabled: false
+
+# External Secrets Operator config
+externalSecret:
+  enabled: true
+  secretStoreRef: aws-secrets-store
+  target: hospital-core-db-credentials
+  data:
+    - secretKey: DATABASE_URL
+      remoteRef:
+        key: northcare/dev/hospital-core/db
+        property: database_url
+    - secretKey: DB_PASSWORD
+      remoteRef:
+        key: northcare/dev/hospital-core/db
+        property: password

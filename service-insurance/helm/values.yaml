@@ -1,0 +1,83 @@
+replicaCount: 2
+
+image:
+  repository: northcare/insurance-service
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  hosts:
+    - host: insurance.northcare.internal
+      paths:
+        - path: /api/v1
+          pathType: Prefix
+
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "100m"
+  limits:
+    memory: "512Mi"
+    cpu: "500m"
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 15
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 8080
+  initialDelaySeconds: 20
+  periodSeconds: 10
+  failureThreshold: 3
+
+env:
+  - name: SPRING_PROFILES_ACTIVE
+    value: "kubernetes"
+  - name: DB_USERNAME
+    valueFrom:
+      secretKeyRef:
+        name: insurance-db-secret
+        key: username
+  - name: DB_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: insurance-db-secret
+        key: password
+  - name: SPRING_DATASOURCE_URL
+    value: "jdbc:postgresql://postgres-insurance:5432/northcare_insurance"
+  - name: EUREKA_SERVICE_URL
+    value: "http://eureka-admin:$(EUREKA_ADMIN_PASSWORD)@service-discovery.discovery.svc.cluster.local:8761/eureka/"
+  - name: EUREKA_ENABLED
+    value: "true"
+
+namespace: insurance
+
+serviceAccount:
+  create: true
+  name: insurance-sa
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/path: "/actuator/prometheus"
+  prometheus.io/port: "8080"

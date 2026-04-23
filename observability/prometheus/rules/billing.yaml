@@ -1,0 +1,77 @@
+groups:
+  - name: billing.rules
+    interval: 30s
+    rules:
+      - record: billing:availability:ratio5m
+        expr: |
+          sum(rate(http_requests_total{job="billing",status_code!~"5.."}[5m]))
+          /
+          sum(rate(http_requests_total{job="billing"}[5m]))
+
+      - record: billing:latency_p95:rate5m
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{job="billing"}[5m]))
+            by (le)
+          )
+
+      - alert: BillingHighErrorRate
+        expr: billing:availability:ratio5m < 0.999
+        for: 5m
+        labels:
+          severity: critical
+          service: billing
+          team: platform
+        annotations:
+          summary: "Billing error rate > 0.1%"
+          description: >
+            SLO violation: {{ $value | humanizePercentage }} availability.
+            Billing errors may cause revenue loss and compliance risk.
+          runbook_url: "https://github.com/northcare-health/observability/blob/main/runbooks/billing.md"
+
+      - alert: BillingClaimsProcessingBacklog
+        expr: billing_claims_queue_depth > 500
+        for: 15m
+        labels:
+          severity: warning
+          service: billing
+          team: platform
+        annotations:
+          summary: "Billing claims queue depth > 500"
+          description: "Claims queue depth is {{ $value | humanize }}. Processing may be delayed."
+
+      - alert: BillingClaimsFailureRate
+        expr: |
+          rate(billing_claims_failed_total[5m])
+          /
+          rate(billing_claims_submitted_total[5m]) > 0.05
+        for: 10m
+        labels:
+          severity: critical
+          service: billing
+          team: platform
+        annotations:
+          summary: "Billing claims failure rate > 5%"
+          description: "{{ $value | humanizePercentage }} of claims are failing. Revenue impact is significant."
+
+      - alert: BillingPodDown
+        expr: kube_deployment_status_replicas_available{deployment="billing", namespace="billing"} == 0
+        for: 1m
+        labels:
+          severity: page
+          service: billing
+          team: platform
+        annotations:
+          summary: "Billing service has no running pods"
+          description: "Billing is completely unavailable — no claims or payments can be processed."
+
+      - alert: BillingHighLatency
+        expr: billing:latency_p95:rate5m > 2.0
+        for: 10m
+        labels:
+          severity: warning
+          service: billing
+          team: platform
+        annotations:
+          summary: "Billing p95 latency > 2s"
+          description: "Billing API p95 latency is {{ $value | humanizeDuration }}. Claims submission is slow."

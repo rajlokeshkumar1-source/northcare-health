@@ -1,0 +1,17 @@
+apiVersion: v2
+name: northcare-service
+description: >
+  Shared Helm library chart for all NorthCare microservices.
+  Provides standard Deployment, Service, ServiceAccount, and HPA templates
+  with built-in Prometheus scraping, security contexts, and External Secrets support.
+type: library
+version: 0.1.0
+keywords:
+  - northcare
+  - healthcare
+  - microservice
+  - library
+maintainers:
+  - name: NorthCare Platform Team
+    email: platform@northcare-health.com
+home: https://github.com/northcare-health/shared-helm-charts

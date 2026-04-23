@@ -1,0 +1,52 @@
+replicaCount: 1  # Eureka server should be singleton (HA setup is Month 4)
+
+image:
+  repository: <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/northcare/service-discovery
+  tag: "latest"
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+  port: 8761
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+env:
+  ENVIRONMENT: dev
+  EUREKA_HOSTNAME: service-discovery.discovery.svc.cluster.local
+
+# Credentials stored in K8s Secret via External Secrets Operator
+envFrom:
+  - secretRef:
+      name: eureka-credentials
+
+livenessProbe:
+  httpGet:
+    path: /actuator/health
+    port: 8761
+  initialDelaySeconds: 60
+  periodSeconds: 30
+
+readinessProbe:
+  httpGet:
+    path: /actuator/health
+    port: 8761
+  initialDelaySeconds: 30
+  periodSeconds: 10
+
+namespace: discovery
+
+serviceAccount:
+  create: true
+  annotations: {}
+
+prometheus:
+  scrape: "true"
+  port: "8761"
+  path: /actuator/prometheus

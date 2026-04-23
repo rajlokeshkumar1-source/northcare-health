@@ -1,0 +1,82 @@
+@Library('northcare-shared-library') _
+
+pipeline {
+    agent any
+
+    environment {
+        SERVICE_NAME = 'insurance'
+        IMAGE_NAME   = "northcare/${SERVICE_NAME}-service"
+        DOCKERFILE   = 'Dockerfile'
+        HELM_CHART   = 'helm'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                sh 'git log --oneline -5'
+            }
+        }
+
+        stage('Build & Test') {
+            steps {
+                dir('service-insurance') {
+                    sh 'mvn clean verify -B --no-transfer-progress'
+                }
+            }
+            post {
+                always {
+                    junit 'service-insurance/target/surefire-reports/*.xml'
+                }
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                dir('service-insurance') {
+                    script {
+                        def tag = "${env.BUILD_NUMBER}-${env.GIT_COMMIT[0..6]}"
+                        sh "docker build -t ${IMAGE_NAME}:${tag} -t ${IMAGE_NAME}:latest ."
+                        env.IMAGE_TAG = tag
+                    }
+                }
+            }
+        }
+
+        stage('Docker Push') {
+            when { branch 'main' }
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'docker-registry-creds',
+                                                  usernameVariable: 'DOCKER_USER',
+                                                  passwordVariable: 'DOCKER_PASS')]) {
+                    sh '''
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                        docker push ${IMAGE_NAME}:latest
+                    '''
+                }
+            }
+        }
+
+        stage('Helm Deploy') {
+            when { branch 'main' }
+            steps {
+                dir('service-insurance') {
+                    sh """
+                        helm upgrade --install ${SERVICE_NAME} ${HELM_CHART} \
+                            --namespace insurance \
+                            --set image.tag=${IMAGE_TAG} \
+                            --set image.repository=${IMAGE_NAME} \
+                            --wait --timeout=120s
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success { echo "✅ ${SERVICE_NAME} pipeline succeeded" }
+        failure { echo "❌ ${SERVICE_NAME} pipeline failed" }
+        always  { cleanWs() }
+    }
+}

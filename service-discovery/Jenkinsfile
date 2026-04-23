@@ -1,0 +1,56 @@
+pipeline {
+    agent any
+    environment {
+        SERVICE_NAME    = 'service-discovery'
+        ECR_REGISTRY    = credentials('ecr-registry')
+        AWS_REGION      = 'us-east-1'
+        GITOPS_REPO     = 'northcare-health/gitops-argocd'
+        IMAGE_TAG       = "${BUILD_NUMBER}-${GIT_COMMIT.take(7)}"
+    }
+    stages {
+        stage('Test') {
+            steps { sh 'mvn test -q' }
+        }
+        stage('Build') {
+            steps { sh 'mvn package -DskipTests -q' }
+        }
+        stage('Docker Build') {
+            steps { sh 'docker build -t $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG .' }
+        }
+        stage('Security Scan') {
+            steps {
+                sh 'docker run --rm aquasec/trivy image $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG --severity HIGH,CRITICAL --exit-code 0'
+            }
+        }
+        stage('Push to ECR') {
+            steps {
+                sh '''
+                    aws ecr get-login-password --region $AWS_REGION | \
+                      docker login --username AWS --password-stdin $(echo $ECR_REGISTRY | cut -d/ -f1)
+                    docker push $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG
+                '''
+            }
+        }
+        stage('Update GitOps') {
+            when { branch 'main' }
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'github-creds', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
+                    sh '''
+                        git clone https://$GH_USER:$GH_TOKEN@github.com/$GITOPS_REPO.git gitops-tmp
+                        cd gitops-tmp
+                        sed -i "s/tag: .*/tag: \\"$IMAGE_TAG\\"/" service-discovery/dev/values.yaml
+                        git config user.email "jenkins@northcare-health.local"
+                        git config user.name "Jenkins CI"
+                        git add . && git commit -m "deploy(service-discovery): $IMAGE_TAG [skip ci]"
+                        git push
+                        cd .. && rm -rf gitops-tmp
+                    '''
+                }
+            }
+        }
+    }
+    post {
+        success { echo "✅ service-discovery:${IMAGE_TAG} deployed" }
+        failure  { echo "❌ Pipeline failed" }
+    }
+}

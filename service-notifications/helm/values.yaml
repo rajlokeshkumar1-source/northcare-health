@@ -1,0 +1,50 @@
+replicaCount: 1
+
+namespace: notifs
+
+image:
+  repository: northcare/notifications-service
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8084
+  targetPort: 8084
+
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "125m"
+  limits:
+    memory: "512Mi"
+    cpu: "500m"
+
+env:
+  DATABASE_URL: "jdbc:postgresql://postgres:5432/northcare_notifications"
+  DB_USERNAME: "northcare"
+  # DB_PASSWORD: set via Kubernetes Secret
+  EUREKA_SERVICE_URL: "http://eureka-admin:$(EUREKA_ADMIN_PASSWORD)@service-discovery.discovery.svc.cluster.local:8761/eureka/"
+  EUREKA_ENABLED: "true"
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8084
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 8084
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 3
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70

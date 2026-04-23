@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-discovery
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: service-discovery
+    app.kubernetes.io/name: service-discovery
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/part-of: northcare
+  annotations:
+    description: "Eureka dashboard available at http://service-discovery.discovery.svc.cluster.local:8761"
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: service-discovery
+  ports:
+    - name: http-eureka
+      port: {{ .Values.service.port }}
+      targetPort: 8761
+      protocol: TCP
