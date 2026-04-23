@@ -1,5 +1,0 @@
-project_name       = "northcare"
-environment        = "dev"
-cluster_name       = "northcare-dev"
-region             = "us-east-1"
-kubernetes_version = "1.29"
