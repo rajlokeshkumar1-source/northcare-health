@@ -28,5 +28,5 @@ jobs:
         env:
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-          GITHUB_MODELS_API_KEY: ${{ secrets.GITHUB_MODELS_API_KEY }}
+          GITHUB_MODELS_API_KEY: ${{ secrets.GH_MODELS_API_KEY }}
         run: python main.py
