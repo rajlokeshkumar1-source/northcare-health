@@ -186,20 +186,32 @@ class JiraClient:
         return {"key": key, "url": url}
 
     def get_recent_resolved_issues(self, limit: int = 5) -> list[dict]:
-        """Return recently resolved SCRUM issues (to avoid repetition)."""
+        """Return recently resolved SCRUM issues (to avoid repetition).
+
+        Uses the current Jira Cloud search API (POST /rest/api/3/search/jql).
+        Returns empty list on any failure so the agent can still run.
+        """
         jql = (
             f'project = {PROJECT_KEY} AND status in ("Done","Closed","Resolved") '
             f'ORDER BY updated DESC'
         )
-        data = self._get(
-            "/rest/api/3/search",
-            params={"jql": jql, "maxResults": limit, "fields": "summary,resolutiondate"},
-        )
-        return [
-            {
-                "key":    issue["key"],
-                "title":  issue["fields"]["summary"],
-                "closed_at": issue["fields"].get("resolutiondate", ""),
-            }
-            for issue in data.get("issues", [])
-        ]
+        try:
+            data = self._post(
+                "/rest/api/3/search/jql",
+                {
+                    "jql": jql,
+                    "maxResults": limit,
+                    "fields": ["summary", "resolutiondate"],
+                },
+            )
+            return [
+                {
+                    "key":     issue["key"],
+                    "title":   issue["fields"]["summary"],
+                    "closed_at": issue["fields"].get("resolutiondate", ""),
+                }
+                for issue in data.get("issues", [])
+            ]
+        except Exception as exc:
+            print(f"  ⚠ Could not fetch recent issues (non-fatal): {exc}")
+            return []
