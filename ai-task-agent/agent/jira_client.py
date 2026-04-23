@@ -185,6 +185,13 @@ class JiraClient:
         print(f"  → {key}: {url}")
         return {"key": key, "url": url}
 
+    def add_comment(self, issue_key: str, comment_md: str) -> None:
+        """Post a comment on a Jira issue (markdown converted to ADF)."""
+        self._post(
+            f"/rest/api/3/issue/{issue_key}/comment",
+            {"body": _md_to_adf(comment_md)},
+        )
+
     def get_recent_resolved_issues(self, limit: int = 5) -> list[dict]:
         """Return recently resolved SCRUM issues (to avoid repetition).
 
