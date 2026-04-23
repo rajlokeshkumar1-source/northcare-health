@@ -45,7 +45,7 @@ class TaskGenerator:
             api_key=github_models_api_key,
         )
         self.skills = skills
-        self.model = "gpt-4o-mini"
+        self.model = "claude-3-5-sonnet"   # Claude Sonnet via GitHub Models (Copilot Pro)
 
     # ------------------------------------------------------------------
     # Internal helpers
