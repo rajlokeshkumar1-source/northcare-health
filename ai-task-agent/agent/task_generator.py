@@ -41,11 +41,11 @@ class TaskGenerator:
 
     def __init__(self, github_models_api_key: str, skills: "SkillsTracker"):
         self.client = OpenAI(
-            base_url="https://models.inference.ai.azure.com",
+            base_url="https://models.github.ai/inference",   # new endpoint (azure deprecated Oct 2025)
             api_key=github_models_api_key,
         )
         self.skills = skills
-        self.model = "claude-3-5-sonnet"   # Claude Sonnet via GitHub Models (Copilot Pro)
+        self.model = "openai/gpt-4.1-mini"   # best available model on GitHub Models (Copilot Pro)
 
     # ------------------------------------------------------------------
     # Internal helpers
